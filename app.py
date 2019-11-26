@@ -66,21 +66,23 @@ def send_notification(to, about):
     print("Sent Notification", response)
 
 
+def handle_changed_location(changed_user_doc):
+    try:
+        # print(type(change), "----------------- Changeeeee------------- ", type(change.document), change.document.to_dict()["currentLocation"].latitude, change.document.to_dict()["currentLocation"].longitude)
+        in_reports = get_in_reports(changed_user_doc.document)
+
+        if len(in_reports) is not 0:
+            for report in in_reports:
+                threading.Thread(target=send_notification(to=changed_user_doc.document, about=report)).start()
+                # send_notification(to=changed_user_doc.document, about=report)
+    except Exception as e:
+        print("user listener", e)
+
+
 def users_listener(collection_snapshot, changed_users_docs, read_time):  # initial call gets everything, duh.
     print("----CHANGE DETECTEDD -------")
     for changed_user_doc in changed_users_docs:  # changes has the doc snapshots of the docs that has changed
-        try:
-            # print(type(change), "----------------- Changeeeee------------- ", type(change.document), change.document.to_dict()["currentLocation"].latitude, change.document.to_dict()["currentLocation"].longitude)
-            in_reports = get_in_reports(changed_user_doc.document)
-
-            if len(in_reports) is not 0:
-                for report in in_reports:
-                    threading.Thread(target=send_notification, args=(changed_user_doc.document, report)).start()
-                    # send_notification(to=changed_user_doc.document, about=report)
-            else:
-                continue
-        except Exception as e:
-            print("user listener", e)
+        threading.Thread(target=handle_changed_location(changed_user_doc)).start()
 
 
 db.collection('users').on_snapshot(users_listener)
