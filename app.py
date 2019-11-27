@@ -5,6 +5,8 @@ from firebase_admin import firestore
 from time import sleep
 from math import sqrt
 import threading
+from twilio.rest import Client
+import config
 
 cred = credentials.Certificate('./areaAlert.json')
 default_app = firebase_admin.initialize_app(cred)
@@ -85,7 +87,33 @@ def users_listener(collection_snapshot, changed_users_docs, read_time):  # initi
         threading.Thread(target=handle_changed_location(changed_user_doc)).start()
 
 
+def send_calls(about):
+    twilio_client = Client(config.account_sid, config.auth_token)
+
+    call = twilio_client.calls.create(
+        to=config.to_number1,
+        from_=config.from_number,
+        url="http://demo.twilio.com/docs/voice.xml"
+    )
+
+    print(call.sid, "call sentt")
+
+
+def handle_report_women_security(report_doc):
+    report_doc = report_doc.to_dict()
+    guardian_numbers_collection = db.collection('users').document(str(report_doc["report_number"])).collection('guardians').stream()
+    for guardian_number_doc in guardian_numbers_collection:
+        send_calls(about=report_doc)
+
+
+def women_security_listener(collection_snapshot, new_reports, read_time):
+    print("----CHANGE DETECTEDDDDD for women securityyyy")
+    for report in new_reports:
+        handle_report_women_security(report.document)
+
+
 db.collection('users').on_snapshot(users_listener)
+db.collection('women_security').on_snapshot(women_security_listener)
 
 while True:
     # to keep program running
