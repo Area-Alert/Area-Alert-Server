@@ -56,10 +56,11 @@ def send_notification(to, about):
     
     notification = messaging.Message(
         data={
+            'notification_id': str(about.id),
             'title': str(about["report_type"]),
-            'body': f'Report about {about["report_type"]} nearby',
+            'body': str(about["report"]),  # f'Report about {about["report_type"]} nearby',
             'priority': str(about["priority"]) if "priority" in about.keys() else DEFAULT_PRIORITY,
-            'tag': str(about["tag"]) if "tag" in about.keys() else 'test'
+            'tag': str(about["tag"]) if "tag" in about.keys() else 'test'  # TODO: extract tag from report verif
         },
         token=to["token"]
     )
@@ -87,33 +88,40 @@ def users_listener(collection_snapshot, changed_users_docs, read_time):  # initi
         threading.Thread(target=handle_changed_location(changed_user_doc)).start()
 
 
-def send_calls(about):
+def send_calls(to, about):
+    # set url to be about report (about)
+    print("sending call", to.to_dict()["number"])
     twilio_client = Client(config.account_sid, config.auth_token)
 
     call = twilio_client.calls.create(
-        to=config.to_number1,
+        to=to.to_dict()["number"],
         from_=config.from_number,
         url="http://demo.twilio.com/docs/voice.xml"
     )
 
     print(call.sid, "call sentt")
 
+    db.collection('women_emergency').document(about.id).delete()
+
 
 def handle_report_women_security(report_doc):
     report_doc = report_doc.to_dict()
-    guardian_numbers_collection = db.collection('users').document(str(report_doc["report_number"])).collection('guardians').stream()
-    for guardian_number_doc in guardian_numbers_collection:
-        send_calls(about=report_doc)
+    try:
+        guardian_numbers_collection = db.collection('users').document(str(report_doc["report_number"])).collection('guardians').stream()
+        for guardian_number_doc in guardian_numbers_collection:
+            threading.Thread(target=send_calls(to=guardian_number_doc, about=report_doc))
+    except Exception:
+        pass
 
 
 def women_security_listener(collection_snapshot, new_reports, read_time):
     print("----CHANGE DETECTEDDDDD for women securityyyy")
     for report in new_reports:
-        handle_report_women_security(report.document)
+        threading.Thread(target=handle_report_women_security(report.document))
 
 
 db.collection('users').on_snapshot(users_listener)
-db.collection('women_security').on_snapshot(women_security_listener)
+db.collection('women_emergency').on_snapshot(women_security_listener)
 
 while True:
     # to keep program running
