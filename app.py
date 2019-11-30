@@ -13,7 +13,7 @@ default_app = firebase_admin.initialize_app(cred)
 DEFAULT_RADIUS = 0.005
 ONE_KM_APPROXIMATE = 0.008162097402023085
 DEFAULT_PRIORITY = '3'
-first_run = True
+users_first_run = security_first_run = True
 
 db = firestore.client()
 
@@ -69,6 +69,9 @@ def send_notification(to, about):
     response = messaging.send(notification)
     print("Sent Notification", response)
 
+    # update sent notifs
+    db.collection('users').document(to.id).collection('notifications_sent').document()
+
 
 def handle_changed_location(changed_user_doc):
     try:
@@ -84,10 +87,10 @@ def handle_changed_location(changed_user_doc):
 
 
 def users_listener(collection_snapshot, changed_users_docs, read_time):  # initial call gets everything, duh.
-    global first_run
-    if first_run:
+    global users_first_run
+    if users_first_run:
         print("first run")
-        first_run = not first_run
+        users_first_run = not users_first_run
         return
     print("----CHANGE DETECTEDD -------")
     for changed_user_doc in changed_users_docs:  # changes has the doc snapshots of the docs that has changed
@@ -121,10 +124,10 @@ def handle_report_women_security(report_doc):
 
 
 def women_security_listener(collection_snapshot, new_reports, read_time):
-    global first_run
-    if first_run:
+    global security_first_run
+    if security_first_run:
         print("first run")
-        first_run = not first_run
+        security_first_run = not security_first_run
         return
     print("----CHANGE DETECTEDDDDD for women securityyyy")
     for report in new_reports:
