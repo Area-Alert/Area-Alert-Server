@@ -44,19 +44,17 @@ def get_in_reports(user_doc):
     # change to reports.where()
     # in_reports = [report for report in db.collection('verified_reports').stream() \
     #               if is_user_in_report(user_doc, report)]
-    in_reports = [report for report in db.collection('reports').where("verified", u"==", True).stream() \
+    in_reports = [report.document for report in db.collection('reports').where("verified", u"==", True).stream() \
                   if is_user_in_report(user_doc, report)]
 
     return in_reports
 
 
-def send_notification(to, about):
-    print(to.to_dict(), "==================", about.to_dict())
-    about_doc = about
-    to_doc = to
+def send_notification(to_doc, about_doc):
+    print(to_doc.to_dict(), "==================", about_doc.to_dict())
 
-    to = to.to_dict()
-    about = about.to_dict()
+    to = to_doc.to_dict()
+    about = about_doc.to_dict()
     
     notification = messaging.Message(
         data={
@@ -73,35 +71,53 @@ def send_notification(to, about):
     print("Sent Notification", response)
 
     def update_sent_notifications(of_doc, about_doc):
-        db.collection('users').document(of_doc.id).collection('notifications_sent').document().set({
+        db.collection('users').document(of_doc.id).collection('notifications_sent').add({
             'notification_id': about_doc.id
         })
 
     threading.Thread(target=update_sent_notifications(of_doc=to_doc, about_doc=about_doc))
 
 
+def get_sent_reports(user_doc):
+    try:
+        return list(report.document for report in db.collection('users').document(user_doc.id).collection('notifications_sent').stream())
+    except Exception:  # collection doesn't exist yet
+        return list()
+
+
+def get_out_reports(user_doc):
+    pass
+
+
 def handle_changed_location(changed_user_doc):
     try:
         # print(type(change), "----------------- Changeeeee------------- ", type(change.document), change.document.to_dict()["currentLocation"].latitude, change.document.to_dict()["currentLocation"].longitude)
-        in_reports = get_in_reports(changed_user_doc.document)
+        in_reports = get_in_reports(changed_user_doc)
+        out_reports = get_out_reports(changed_user_doc)
+        sent_reports = get_sent_reports(changed_user_doc)
 
-        if len(in_reports) is not 0:
-            for report in in_reports:
-                threading.Thread(target=send_notification(to=changed_user_doc.document, about=report)).start()
+        # TODO: maybe change to report id
+        reports_to_send = set(in_reports).difference(set(sent_reports))
+        print("sent reports:", len(sent_reports), "to send: ", len(reports_to_send))
+
+        if len(reports_to_send) is not 0:
+            for report_doc in reports_to_send:
+                threading.Thread(target=send_notification(to_doc=changed_user_doc, about_doc=report_doc)).start()
                 # send_notification(to=changed_user_doc.document, about=report)
+
     except Exception as e:
         print("user listener", e)
 
 
-def users_listener(collection_snapshot, changed_users_docs, read_time):  # initial call gets everything, duh.
+def users_listener(collection_snapshot, changed_users_doc_snapshots, read_time):  # initial call gets everything, duh.
     global users_first_run
     if users_first_run:
-        print("first run")
+        print("users first run")
         users_first_run = not users_first_run
         return
-    print("----location CHANGE DETECTEDD -------")
-    for changed_user_doc in changed_users_docs:  # changes has the doc snapshots of the docs that has changed
-        threading.Thread(target=handle_changed_location(changed_user_doc)).start()
+    for changed_user_doc_snapshot in changed_users_doc_snapshots:  # changes has the doc snapshots of the docs that has changed
+        print("----location CHANGE DETECTEDD -------")
+        threading.Thread(target=handle_changed_location(changed_user_doc_snapshot.document)).start()
 
 
 def send_calls(to, about):
