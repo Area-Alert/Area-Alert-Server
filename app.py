@@ -52,12 +52,15 @@ def get_in_reports(user_doc):
 
 def send_notification(to, about):
     print(to.to_dict(), "==================", about.to_dict())
+    about_doc = about
+    to_doc = to
+
     to = to.to_dict()
     about = about.to_dict()
     
     notification = messaging.Message(
         data={
-            'notification_id': str(about.id),
+            'notification_id': str(about_doc.id),
             'title': str(about["report_type"]),
             'body': str(about["report"]),  # f'Report about {about["report_type"]} nearby',
             'priority': str(about["priority"]) if "priority" in about.keys() else DEFAULT_PRIORITY,
@@ -69,8 +72,12 @@ def send_notification(to, about):
     response = messaging.send(notification)
     print("Sent Notification", response)
 
-    # update sent notifs
-    db.collection('users').document(to.id).collection('notifications_sent').document()
+    def update_sent_notifications(of_doc, about_doc):
+        db.collection('users').document(of_doc.id).collection('notifications_sent').document().set({
+            'notification_id': about_doc.id
+        })
+
+    threading.Thread(target=update_sent_notifications(of_doc=to_doc, about_doc=about_doc))
 
 
 def handle_changed_location(changed_user_doc):
@@ -92,7 +99,7 @@ def users_listener(collection_snapshot, changed_users_docs, read_time):  # initi
         print("first run")
         users_first_run = not users_first_run
         return
-    print("----CHANGE DETECTEDD -------")
+    print("----location CHANGE DETECTEDD -------")
     for changed_user_doc in changed_users_docs:  # changes has the doc snapshots of the docs that has changed
         threading.Thread(target=handle_changed_location(changed_user_doc)).start()
 
