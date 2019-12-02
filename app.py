@@ -241,4 +241,4 @@ db.collection('reports').on_snapshot(reports_listener)
 
 while True:
     # to keep program running
-    sleep(1000)
+    sleep(10000)
